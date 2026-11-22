@@ -109,9 +109,17 @@ backend/src/database/schema.sql
 
 El script crea la base de datos `InnovacionEducativa` con todas las tablas, índices y datos iniciales (cursos, lecciones, recursos multimedia, niveles, insignias y desafíos).
 
+Este script está pensado para crear una base de datos nueva; no debe ejecutarse
+completo sobre una base de datos existente, pues incluye `CREATE DATABASE` y
+`CREATE TABLE`. Para comprobar el estado de una instalación existente, utiliza
+las consultas de la sección siguiente.
+
 ---
 
 ## Tablas de la base de datos
+
+El esquema define **13 tablas**, por lo que supera el mínimo de 10. Las
+relaciones entre ellas se implementan con claves primarias y foráneas:
 
 | Tabla               | Descripción                                           |
 |---------------------|-------------------------------------------------------|
@@ -128,6 +136,64 @@ El script crea la base de datos `InnovacionEducativa` con todas las tablas, índ
 | `ProgresoDesafio`   | Progreso de cada estudiante en los desafíos           |
 | `Niveles`           | Niveles de gamificación con rangos de puntos          |
 | `Usuarios`          | Usuarios del sistema para autenticación y control de roles (estudiante, docente y administrador) |
+
+### Relaciones
+
+| Tabla dependiente | Clave foránea | Tabla referenciada | Relación |
+|-------------------|---------------|--------------------|----------|
+| `Lecciones` | `CursoId` | `Cursos(CursoId)` | Un curso tiene muchas lecciones. |
+| `MediaItems` | `CursoId` | `Cursos(CursoId)` | Un curso tiene muchos recursos multimedia. |
+| `EstudianteCurso` | `EstudianteId` | `Estudiantes(EstudianteId)` | Relaciona estudiantes con cursos. |
+| `EstudianteCurso` | `CursoId` | `Cursos(CursoId)` | Relaciona cursos con estudiantes. |
+| `EstudianteInsignia` | `EstudianteId` | `Estudiantes(EstudianteId)` | Relaciona estudiantes con insignias. |
+| `EstudianteInsignia` | `InsigniaId` | `Insignias(InsigniaId)` | Relaciona insignias con estudiantes. |
+| `ProgresoDesafio` | `EstudianteId` | `Estudiantes(EstudianteId)` | Relaciona estudiantes con desafíos. |
+| `ProgresoDesafio` | `DesafioId` | `Desafios(DesafioId)` | Relaciona desafíos con estudiantes. |
+| `ProgresoLeccion` | `EstudianteId` | `Estudiantes(EstudianteId)` | Relaciona estudiantes con lecciones. |
+| `ProgresoLeccion` | `LeccionId` | `Lecciones(LeccionId)` | Relaciona lecciones con estudiantes. |
+| `SesionUso` | `EstudianteId` | `Estudiantes(EstudianteId)` | Un estudiante puede tener varias sesiones de uso. |
+| `Usuarios` | `EstudianteId` | `Estudiantes(EstudianteId)` | Una cuenta de estudiante puede vincularse con un estudiante; docentes y administradores pueden dejarlo vacío. |
+
+`EstudianteCurso`, `EstudianteInsignia`, `ProgresoDesafio` y `ProgresoLeccion`
+son tablas intermedias que permiten relacionar varios registros de ambos lados.
+`ProgresoLeccion` también impide registrar dos veces la misma combinación de
+estudiante y lección.
+
+`Niveles` es un catálogo independiente: el nivel de un estudiante se calcula
+comparando sus puntos con `MinPuntos` y `MaxPuntos`. No existe una clave
+foránea directa hacia esa tabla, por lo que no se almacena un nivel que pueda
+quedar desactualizado al cambiar los puntos.
+
+### Comprobar una base de datos existente
+
+En SQL Server Management Studio, selecciona `InnovacionEducativa` y ejecuta:
+
+```sql
+-- Número de tablas de usuario y sus nombres.
+SELECT COUNT(*) AS TotalTablas FROM sys.tables;
+SELECT SCHEMA_NAME(schema_id) AS Esquema, name AS Tabla
+FROM sys.tables
+ORDER BY Esquema, Tabla;
+
+-- Claves foráneas y su estado.
+SELECT
+    OBJECT_SCHEMA_NAME(parent_object_id) AS EsquemaOrigen,
+    OBJECT_NAME(parent_object_id) AS TablaOrigen,
+    name AS ClaveForanea,
+    OBJECT_SCHEMA_NAME(referenced_object_id) AS EsquemaDestino,
+    OBJECT_NAME(referenced_object_id) AS TablaDestino,
+    is_disabled AS Deshabilitada,
+    is_not_trusted AS NoValidada
+FROM sys.foreign_keys
+ORDER BY EsquemaOrigen, TablaOrigen, ClaveForanea;
+```
+
+Una clave foránea habilitada y validada muestra `0` en ambas columnas de estado.
+Los nombres y las tablas de una instalación existente pueden diferir del
+esquema: por ejemplo, la base de datos revisada contiene `RecursosMultimedia`
+en lugar de `MediaItems`. El backend consulta `MediaItems`, por lo que esa
+diferencia debe resolverse antes de utilizar las funciones multimedia de esa
+instalación; no se modifica automáticamente al actualizar esta documentación.
 
 ---
 
