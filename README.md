@@ -254,11 +254,38 @@ La app queda en `http://localhost:5173`. El proxy de Vite redirige `/api/*` al b
 | GET    | `/api/media/library`  | Todos los recursos (`?type=video|image`) |
 
 ### Reportes
+
+Hay dos reportes que utilizan las relaciones entre estudiantes, matrículas,
+cursos y lecciones:
+
+- **Individual:** cursos inscritos y completados, avance promedio, lecciones
+  completadas, minutos de uso y hasta 10 actividades recientes. Utiliza
+  `Estudiantes`, `EstudianteCurso`, `Cursos`, `Lecciones`, `ProgresoLeccion`
+  y `SesionUso`.
+- **Por curso:** estudiantes matriculados, completados, sin avance, promedio
+  de avance y lecciones completadas por estudiante. Utiliza `Cursos`,
+  `EstudianteCurso`, `Estudiantes`, `Lecciones` y `ProgresoLeccion`.
+
+Desde la página **Reportes**, un docente o administrador selecciona un
+estudiante o curso, consulta el resultado y puede descargarlo en PDF. La API
+también permite a un estudiante autenticado consultar y descargar únicamente
+su propio reporte individual. Un identificador inválido devuelve `400` y uno
+inexistente devuelve `404`; un estudiante sin matrículas o un curso sin
+estudiantes produce un reporte válido con su nombre y sin filas de matrícula.
+
+Para ejecutar las pruebas de los reportes:
+
+```bash
+cd backend
+npm test
+```
+
 | Método | Ruta                                   | Descripción                          |
 |--------|----------------------------------------|--------------------------------------|
 | GET    | `/api/reports/student/:estudianteId`   | Reporte individual (JSON)            |
 | GET    | `/api/reports/course/:cursoId`         | Reporte grupal por curso (JSON)      |
 | GET    | `/api/reports/student/:id/pdf`         | Reporte individual (PDF descargable) |
+| GET    | `/api/reports/course/:id/pdf`          | Reporte grupal (PDF descargable)      |
 
 ### Autenticación
 

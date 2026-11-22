@@ -21,8 +21,17 @@ export default function ReportsPage() {
     const [error, setError]             = useState('');
 
     useEffect(() => {
-        fetchStudents().then(d => setEstudiantes(d.estudiantes || [])).catch(() => {});
-        fetchCourses().then(d => setCursos(Array.isArray(d) ? d : [])).catch(() => {});
+        Promise.all([fetchStudents(), fetchCourses()])
+            .then(([estudiantesData, cursosData]) => {
+                if (estudiantesData.error) throw new Error(estudiantesData.error);
+                if (cursosData.error) throw new Error(cursosData.error);
+                if (!Array.isArray(estudiantesData.estudiantes) || !Array.isArray(cursosData)) {
+                    throw new Error('No se pudieron cargar los estudiantes y cursos.');
+                }
+                setEstudiantes(estudiantesData.estudiantes);
+                setCursos(cursosData);
+            })
+            .catch(err => setError(`No se pudieron cargar los filtros: ${err.message}`));
     }, []);
 
     const cambiarTab = (nuevaTab) => {
@@ -97,12 +106,14 @@ export default function ReportsPage() {
                     <button
                         className={`btn rounded-pill fw-semibold px-4 ${tab === 'estudiante' ? 'btn-primary-custom' : 'btn-outline-secondary'}`}
                         onClick={() => cambiarTab('estudiante')}
+                        disabled={cargando}
                     >
                         <Icon name="people" /> Por estudiante
                     </button>
                     <button
                         className={`btn rounded-pill fw-semibold px-4 ${tab === 'curso' ? 'btn-primary-custom' : 'btn-outline-secondary'}`}
                         onClick={() => cambiarTab('curso')}
+                        disabled={cargando}
                     >
                         <Icon name="book" /> Por curso
                     </button>
@@ -116,6 +127,7 @@ export default function ReportsPage() {
                                 className="form-select rounded-pill"
                                 value={estudianteId}
                                 onChange={e => { setEstudianteId(e.target.value); setReporte(null); }}
+                                disabled={cargando}
                             >
                                 <option value="">Selecciona un estudiante</option>
                                 {estudiantes.map(e => (
@@ -142,6 +154,7 @@ export default function ReportsPage() {
                                 className="form-select rounded-pill"
                                 value={cursoId}
                                 onChange={e => { setCursoId(e.target.value); setReporte(null); }}
+                                disabled={cargando}
                             >
                                 <option value="">Selecciona un curso</option>
                                 {cursos.map(c => (
@@ -214,7 +227,7 @@ export default function ReportsPage() {
                             <ul className="report-list list-group">
                                 {reporte.cursos.map((c, i) => (
                                     <li key={i} className="list-group-item d-flex justify-content-between align-items-center">
-                                        <span>{c.tituloCurso}</span>
+                                        <span>{c.tituloCurso} <small className="text-muted">({c.leccionesCompletadas}/{c.totalLecciones} lecciones)</small></span>
                                         <span className="badge rounded-pill text-white" style={{ background: 'linear-gradient(135deg, #FF6B6B, #4ECDC4)' }}>{c.porcentaje}%</span>
                                     </li>
                                 ))}
@@ -290,6 +303,7 @@ export default function ReportsPage() {
                                         <tr>
                                             <th>Estudiante</th>
                                             <th>Avance</th>
+                                            <th>Lecciones</th>
                                             <th>Estado</th>
                                         </tr>
                                     </thead>
@@ -312,9 +326,10 @@ export default function ReportsPage() {
                                                         </div>
                                                     </div>
                                                 </td>
+                                                <td>{e.leccionesCompletadas}/{e.totalLecciones}</td>
                                                 <td>
                                                     <span className={`badge rounded-pill px-3 py-2 ${e.completado ? 'bg-success' : 'bg-warning text-dark'}`}>
-                                                        {e.completado ? 'Completado' : 'En progreso'}
+                                                        {e.completado ? 'Completado' : Number(e.porcentaje) > 0 ? 'En progreso' : 'Sin avance'}
                                                     </span>
                                                 </td>
                                             </tr>

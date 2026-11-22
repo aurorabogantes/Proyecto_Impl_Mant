@@ -8,34 +8,53 @@ function puedeVerReporte(user, estudianteId) {
     return user.rol === "estudiante" && Number(user.estudianteId) === Number(estudianteId);
 }
 
+function validarId(res, valor) {
+    if (!/^[1-9]\d*$/.test(valor) || Number(valor) > 2147483647) {
+        res.status(400).json({ error: "El identificador debe ser un entero positivo válido" });
+        return false;
+    }
+    return true;
+}
+
+function responderError(res, error) {
+    if (res.headersSent) {
+        res.destroy(error);
+        return;
+    }
+    res.status(error.statusCode || 500).json({ error: error.message });
+}
+
 const reportController = {
 
     // GET /api/reports/student/:estudianteId  (sirve tanto a docente como a padre/tutor)
     async student(req, res) {
         try {
+            if (!validarId(res, req.params.estudianteId)) return;
             if (!puedeVerReporte(req.user, req.params.estudianteId)) {
                 return res.status(403).json({ error: "No tienes permiso para ver este reporte" });
             }
             const reporte = await reportService.getStudentReport(req.params.estudianteId);
             res.json(reporte);
         } catch (error) {
-            res.status(500).json({ error: error.message });
+            responderError(res, error);
         }
     },
 
     // GET /api/reports/course/:cursoId
     async course(req, res) {
         try {
+            if (!validarId(res, req.params.cursoId)) return;
             const reporte = await reportService.getCourseReport(req.params.cursoId);
             res.json(reporte);
         } catch (error) {
-            res.status(500).json({ error: error.message });
+            responderError(res, error);
         }
     },
 
     // GET /api/reports/student/:estudianteId/pdf  -> RF-22
     async studentPdf(req, res) {
         try {
+            if (!validarId(res, req.params.estudianteId)) return;
             if (!puedeVerReporte(req.user, req.params.estudianteId)) {
                 return res.status(403).json({ error: "No tienes permiso para ver este reporte" });
             }
@@ -46,6 +65,7 @@ const reportController = {
 
             const doc = new PDFDocument({ margin: 50 });
             doc.pipe(res);
+            doc.on("error", error => responderError(res, error));
 
             doc.fontSize(18).text("Reporte de desempeño", { align: "center" });
             doc.moveDown();
@@ -62,12 +82,14 @@ const reportController = {
             doc.moveDown();
 
             doc.fontSize(14).text("Cursos");
+            if (reporte.cursos.length === 0) doc.fontSize(11).text("Sin cursos inscritos.");
             reporte.cursos.forEach(c => {
-                doc.fontSize(11).text(`- ${c.tituloCurso}: ${c.porcentaje}% (${c.getEstado ? c.getEstado() : ""})`);
+                doc.fontSize(11).text(`- ${c.tituloCurso}: ${c.porcentaje}% (${c.getEstado()}) - Lecciones: ${c.leccionesCompletadas}/${c.totalLecciones}`);
             });
             doc.moveDown();
 
             doc.fontSize(14).text("Actividad reciente");
+            if (reporte.actividadesRecientes.length === 0) doc.fontSize(11).text("Sin actividad registrada.");
             reporte.actividadesRecientes.forEach(a => {
                 const fecha = a.FechaCompletado ? new Date(a.FechaCompletado).toLocaleDateString("es-CR") : "";
                 doc.fontSize(11).text(`- [${fecha}] ${a.Curso} · ${a.Leccion} (${a.Puntuacion ?? "-"} pts)`);
@@ -75,13 +97,14 @@ const reportController = {
 
             doc.end();
         } catch (error) {
-            res.status(500).json({ error: error.message });
+            responderError(res, error);
         }
     },
 
     // GET /api/reports/course/:cursoId/pdf  (solo docente/administrador)
     async coursePdf(req, res) {
         try {
+            if (!validarId(res, req.params.cursoId)) return;
             const reporte = await reportService.getCourseReport(req.params.cursoId);
 
             res.setHeader("Content-Type", "application/pdf");
@@ -89,6 +112,7 @@ const reportController = {
 
             const doc = new PDFDocument({ margin: 50 });
             doc.pipe(res);
+            doc.on("error", error => responderError(res, error));
 
             doc.fontSize(18).text("Reporte grupal del curso", { align: "center" });
             doc.moveDown();
@@ -109,13 +133,13 @@ const reportController = {
                 doc.fontSize(11).text("No hay estudiantes inscritos en este curso.");
             } else {
                 reporte.estudiantes.forEach(e => {
-                    doc.fontSize(11).text(`- ${e.nombre}: ${e.porcentaje}% (${e.completado ? "Completado" : "En progreso"})`);
+                    doc.fontSize(11).text(`- ${e.nombre}: ${e.porcentaje}% (${e.getEstado()}) - Lecciones: ${e.leccionesCompletadas}/${e.totalLecciones}`);
                 });
             }
 
             doc.end();
         } catch (error) {
-            res.status(500).json({ error: error.message });
+            responderError(res, error);
         }
     }
 

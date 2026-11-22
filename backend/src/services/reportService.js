@@ -1,12 +1,23 @@
 const progressService = require("./progressService");
+const repository = require("../repositories/ReportRepository");
+
+function noEncontrado(mensaje) {
+    const error = new Error(mensaje);
+    error.statusCode = 404;
+    return error;
+}
 
 class ReportService {
 
     // RF-19 / RF-21: reporte individual (docente o padre/tutor)
     async getStudentReport(estudianteId) {
-        const cursos = await progressService.getProgressByStudent(estudianteId);
-        const historial = await progressService.getActivityHistory(estudianteId);
-        const minutosUso = await progressService.getTotalUsageTime(estudianteId);
+        const estudiante = await repository.obtenerEstudiante(estudianteId);
+        if (!estudiante) throw noEncontrado("Estudiante no encontrado");
+        const [cursos, historial, minutosUso] = await Promise.all([
+            progressService.getProgressByStudent(estudianteId),
+            progressService.getActivityHistory(estudianteId),
+            progressService.getTotalUsageTime(estudianteId)
+        ]);
 
         const cursosCompletados = cursos.filter(c => c.completado).length;
         const promedioAvance = cursos.length > 0
@@ -15,7 +26,7 @@ class ReportService {
 
         return {
             estudianteId: Number(estudianteId),
-            nombre: cursos[0]?.nombre || null,
+            nombre: estudiante.Nombre,
             generadoEl: new Date(),
             resumen: {
                 cursosInscritos: cursos.length,
@@ -30,6 +41,8 @@ class ReportService {
 
     // RF-20: reporte grupal por curso, para el docente
     async getCourseReport(cursoId) {
+        const curso = await repository.obtenerCurso(cursoId);
+        if (!curso) throw noEncontrado("Curso no encontrado");
         const estudiantes = await progressService.getProgressByCourse(cursoId);
 
         const promedioAvance = estudiantes.length > 0
@@ -38,7 +51,7 @@ class ReportService {
 
         return {
             cursoId: Number(cursoId),
-            tituloCurso: estudiantes[0]?.tituloCurso || null,
+            tituloCurso: curso.Titulo,
             generadoEl: new Date(),
             resumen: {
                 totalEstudiantes: estudiantes.length,
